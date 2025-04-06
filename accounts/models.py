@@ -220,7 +220,7 @@ class OTP(models.Model):
         self._check_for_refresh()
         self._generate_expire_time()
         self._generate_refresh_time()
-        self.save(updated_fields=['code', 'refresh_attempts', 'last_refreshed_at', 'expires_at', 'refreshes_at'])
+        self.save(update_fields=['code', 'refresh_attempts', 'last_refreshed_at', 'expires_at', 'refreshes_at'])
         return True
     
     def verify(self, code):
