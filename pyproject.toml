@@ -16,6 +16,7 @@ channels-redis = "^4.2.1"
 python-decouple = "^3.8"
 cryptography = "^44.0.2"
 requests = "^2.32.3"
+pyotp = "^2.9.0"
 
 
 [build-system]
