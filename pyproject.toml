@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "\"funlife messenger\""
+version = "0.1.0"
+description = ""
+authors = ["Mehdi Radfar <funlifewinpain@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+django = "^5.2"
+djangorestframework = "^3.16.0"
+djangorestframework-simplejwt = "^5.5.0"
+channels = "^4.2.2"
+channels-redis = "^4.2.1"
+python-decouple = "^3.8"
+cryptography = "^44.0.2"
+requests = "^2.32.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
