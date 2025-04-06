@@ -6,22 +6,22 @@ from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from datetime import timedelta
 from django.conf import settings
-from enum import Enum
-import uuid
+from enum import StrEnum
+import uuid, pyotp
 
 
 
 # Create your models here.
 
-class Roles(Enum):
+class Roles(StrEnum):
     USER="user"
     ADMIN="admin"
 
-class Auth(Enum):
+class Auth(StrEnum):
     LOGIN = "login"
     FORGET = "forget"
 
-class UserManager(BaseUserManager, PermissionsMixin):
+class UserManager(BaseUserManager):
     """Customize User Manager"""
     def create_user(self, username, email, password=None, **extra_fields):
         """Create and Save a new user"""
@@ -48,7 +48,7 @@ class UserManager(BaseUserManager, PermissionsMixin):
     def check_for_password(self, password=None):
         """checking for password"""
         if not password:
-            return ValidationError("Password is required.")
+            raise ValidationError("Password is required.")
         
     def validate_password(self, username, email, password=None):
         """validating password"""
@@ -132,7 +132,7 @@ class User(AbstractBaseUser):
         """Checking for ban"""
         return self.ban_until and self.ban_until > timezone.now()
     
-    def ban_user(self, year=None, hours=None, minutes=5):
+    def ban_user(self, year=0, hours=0, minutes=5):
         """banning a user with for a speciefic hours"""
         self.ban_until = timezone.now() + timedelta(
             days=year * 365,
@@ -172,18 +172,101 @@ class User(AbstractBaseUser):
         self.forget_attempts = 0
         self.save()
 
+class OTPPurpose(models.TextChoices):
+    """OTP purposes enumeration"""
+    REGISTRATION = "registration", "Registration"
+    RESET_PASSWORD = "reset_password", "Reset Password"
+    TWO_FACTOR = "2fa", "Two-Factor Authentication"
+    VERIFICATION = "verification", "Account Verification"
 class OTP(models.Model):
-    PURPOSES = (
-        ("2fa", '2FA'),
-        ("registration", "Registration"),
-        ("verification", "Verification")
-    )
     id = models.UUIDField(primary_key=True, unique=True, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps')
     code = models.CharField(max_length=6, null=True, blank=True)
-    purpose = models.CharField(choices=PURPOSES)
+    purpose = models.CharField(max_length=40, choices=OTPPurpose.choices, default=OTPPurpose.VERIFICATION)
     refreshes_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     is_used = models.BooleanField(default=False)
     last_refreshed_at = models.DateTimeField(null=True, blank=True)
-    refreshes_attempts = models.IntegerField(default=0)
+    refresh_attempts = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"OTP ({self.purpose}) for {self.user.username}"
+    
+    def save(self, *args, **kwargs):
+        """OVerride save to generate OTP code if not provided"""
+        self._check_for_empty_fields()
+        super().save(*args, **kwargs)
+    
+    # Properties
+    @property
+    def is_expire(self):
+        return timezone.now() > self.expires_at
+    
+    @property
+    def is_refresh(self):
+        return timezone.now() > self.refreshes_at
+    
+    def refresh(self):
+        """Generate a new OTP"""
+        if not self.is_refresh:
+            return False
+        
+        self._generate_otp()
+        self._check_for_refresh()
+        self._generate_expire_time()
+        self._generate_refresh_time()
+        self.save(updated_fields=['code', 'refresh_attempts', 'last_refreshed_at', 'expires_at', 'refreshes_at'])
+        return True
+    
+    def verify(self, code):
+        """Verify the OTP code"""
+        if self.is_used or self.is_expire:
+            return False
+        
+        if str(self.code) == str(code):
+            self.is_used = True
+            self.save(update_fields=['is_used'])
+            return True
+        
+        return False
+    
+    # Helper functions
+    def _check_for_refresh(self):
+        """Check for refresh and increment refresh times"""
+        self._increment_refresh()
+        if self.refresh_attempts >= settings.MAX_OTP_REFRESH:
+            raise ValueError("You cannot refresh code again")
+    
+    def _increment_refresh(self):
+        self.refresh_attempts += 1
+        self.last_refreshed_at = timezone.now()
+    
+    
+    def _check_for_empty_fields(self):
+        if not self.code:
+            self._generate_otp()
+        
+        if not self.expires_at:
+            self._generate_expire_time()
+        
+        if not self.refreshes_at:
+            self._generate_refresh_time()
+    
+    def _generate_otp(self):
+        """Generating a secure 6-digit OTP Code"""
+        totp = pyotp.TOTP(settings.OTP_SECRET)
+        self.code = totp.now()
+        return self.code
+    
+    def _generate_refresh_time(self):
+        self.refreshes_at = timezone.now() + timedelta(minutes=2)
+        return self.refreshes_at
+    
+    def _generate_expire_time(self):
+        self.expires_at = timezone.now() + timedelta(minutes=2)
+        return self.expires_at
