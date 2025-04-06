@@ -44,11 +44,11 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     
     'accounts',
-    # 'profiles',
-    # 'messagings',
-    # 'backups',
-    # 'session',
-    # 'friendships',
+    'profiles',
+    'messagings',
+    'backups',
+    'user_sessions',
+    'friendships',
 ]
 
 MIDDLEWARE = [
