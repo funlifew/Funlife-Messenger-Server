@@ -11,6 +11,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+from decouple import config
+import pyotp
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -42,11 +44,11 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     
     'accounts',
-    'profiles',
-    'messagings',
-    'backups',
-    'sessions',
-    'friendships',
+    # 'profiles',
+    # 'messagings',
+    # 'backups',
+    # 'session',
+    # 'friendships',
 ]
 
 MIDDLEWARE = [
@@ -135,4 +137,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MAX_OTP_REFRESH = 3
 MAX_AUTH_TRIES = 5
 
-AUTH_USER_MODEL = "accounts.User"
+# AUTH_USER_MODEL = "accounts.User"
+
+OTP_SECRET = config("OTP_SECRET", pyotp.random_base32())
