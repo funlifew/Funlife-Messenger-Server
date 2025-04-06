@@ -137,6 +137,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MAX_OTP_REFRESH = 3
 MAX_AUTH_TRIES = 5
 
-# AUTH_USER_MODEL = "accounts.User"
+AUTH_USER_MODEL = "accounts.User"
 
 OTP_SECRET = config("OTP_SECRET", pyotp.random_base32())
