@@ -22,6 +22,7 @@ from .serializers import (
     TwoFactorVerifySerializer,
 )
 from user_sessions.models import UserSession
+from django.conf import settings
 import pyotp
 
 User = get_user_model
@@ -65,7 +66,7 @@ class RegisterView(generics.CreateAPIView):
         user = serializer.save()
         
         # OTP creation
-        otp = OTP.objects.create(user=user, purpose=OTPPurpose.REGISTRATION)
+        otp = OTP.objects.create(user=user, purpose=OTPPurpose.VERIFICATION)
 
         return Response({
             'message': 'User registered successfully. Please verify your email.',
@@ -82,7 +83,8 @@ class LoginView(APIView):
         serializer.is_valid(raise_exception=True)
         
         # Get authenticated user
-        user = serializer.validated_data['user']
+        user = serializer.validated_data 
+        print(user)
         
         # check if 2FA is enabled
         if user.is_2fa_enabled:
@@ -207,3 +209,158 @@ class PasswordResetRequestView(APIView):
             return Response({
                 'message': 'If this email is registered, a reset link has been sent.'
             }, status=status.HTTP_200_OK)
+
+class PasswordResetConfirmView(APIView):
+    """Confirm password reset with OTP"""
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # get user and OTP from validated_data
+        user = serializer.validated_data['user']
+        otp = serializer.validated_data['otp']
+        
+        # Reset password
+        user.set_password(serializer.validated_data['new_password'])
+        user.save()
+        
+        # Mark otp as used
+        otp.is_used = True
+        otp.save()
+        
+        # Invalidate All existing session for sec
+        UserSession.invalidate_all_sessions(user)
+        
+        return Response({
+            'message': 'Password reset successful. Please login with your new password.'
+        }, status=status.HTTP_200_OK)
+
+class ChangePasswordView(APIView):
+    """Change password for authenticated users"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        
+        # Update password
+        user = serializer.save()
+        
+        # For security, invalidate all other sessions
+        current_session_id = request.data.get('session_id')
+        if current_session_id:
+            UserSession.invalidate_all_sessions(user, exclude_id=current_session_id)
+        
+        return Response({
+            'message': 'Password changed successfully'
+        }, status=status.HTTP_200_OK)
+
+class TwoFactorVerifyView(APIView):
+    """Verification of 2fas"""
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        serializer = TwoFactorVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Get user from validated OTP
+        user = serializer.validated_data['user']
+        
+        # Create new session for user
+        session = create_user_session(user, request)
+        
+        # Generate tokens for user
+        tokens = get_tokens_for_user(user)
+        
+        # return response
+        return Response({
+            "message": "Two-factor authentication successful.",
+            "tokens": tokens,
+            "user": UserSerializer(user).data,
+            "session_id": str(session.id),
+        }, status=status.HTTP_200_OK)
+class TwoFactorSetupView(APIView):
+    """Setup or disable 2FA"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        serializer = TwoFactorSetupSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        
+        user = request.user
+        enable = serializer.validated_data['enable']
+        
+        if enable:
+            # Enable 2FA
+            user.is_2fa_enabled = True
+            user.save()
+            
+            # Generate sample OTP for testing
+            otp_secret = settings.OTP_SECRET
+            totp = pyotp.TOTP(otp_secret)
+            current_otp = totp.now()
+            
+            return Response({
+                'message': 'Two-factor authentication enabled successfully',
+                'test_code': current_otp  # TODO:  Only for testing! Remove in production
+            })
+        else:
+            # Disable 2FA (code validation happens in serializer)
+            user.is_2fa_enabled = False
+            user.save()
+            
+            # Invalidate all sessions for security
+            current_session_id = request.data.get('session_id')
+            if current_session_id:
+                UserSession.invalidate_all_sessions(user, exclude_id=current_session_id)
+            
+            return Response({
+                'message': 'Two-factor authentication disabled successfully'
+            })
+
+class OTPRefreshView(APIView):
+    """Refresh an existing OTP"""
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        otp_id = request.data.get('otp_id')
+        
+        if not otp_id:
+            return Response({'error': 'OTP ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            otp = OTP.objects.get(id=otp_id)
+            
+            # Check if OTP is already used
+            if otp.is_used:
+                return Response({
+                    'error': 'This code has already been used'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Try to refresh the OTP
+            if otp.refresh():
+                return Response({
+                    'message': 'OTP refreshed successfully',
+                    'otp_id': str(otp.id),
+                    'code': otp.code,  # TODO: Only for testing! Remove in production
+                    'expires_at': otp.expires_at
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'error': 'Cannot refresh OTP at this time'
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except OTP.DoesNotExist:
+            return Response({
+                'error': 'Invalid OTP ID'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+class UserProfileView(generics.RetrieveUpdateAPIView):
+    """View and update user profile"""
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_object(self):
+        return self.request.user

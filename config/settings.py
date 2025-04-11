@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'channels',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     
     'accounts',
     'profiles',
@@ -140,3 +141,51 @@ MAX_AUTH_TRIES = 5
 AUTH_USER_MODEL = "accounts.User"
 
 OTP_SECRET = config("OTP_SECRET", pyotp.random_base32())
+
+# REST Framework settings
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '20/minute',  # Limit anonymous users to 20 requests per minute
+        'user': '60/minute',  # Limit authenticated users to 60 requests per minute
+    },
+}
+
+# JWT settings
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),  # Short lifetime for security
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),     # Longer refresh lifetime
+    'ROTATE_REFRESH_TOKENS': True,                   # Generate new refresh token when refreshed
+    'BLACKLIST_AFTER_ROTATION': True,                # Blacklist old refresh tokens
+    
+    'ALGORITHM': 'HS256',                            # Signing algorithm
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    
+    'AUTH_HEADER_TYPES': ('Bearer',),                # Auth header prefix
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    
+    'JTI_CLAIM': 'jti',                              # JWT ID claim
+    
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=15),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=7),
+}
