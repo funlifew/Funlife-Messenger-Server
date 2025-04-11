@@ -93,6 +93,7 @@ class User(AbstractBaseUser):
     username = models.CharField(
         max_length=60, 
         unique=True,
+        db_index=True,
         validators=[
             USERNAME_REGEX_VALIDATOR
         ]
@@ -100,15 +101,15 @@ class User(AbstractBaseUser):
     email = models.EmailField(unique=True)
     
     # validation fields
-    is_verified = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
+    is_verified = models.BooleanField(default=False, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
-    role = models.CharField(max_length=10, choices=ROLES, default='user')
+    role = models.CharField(max_length=10, choices=ROLES, default='user', db_index=True)
 
     # Security fields
     login_failed_attempts = models.IntegerField(default=0)
-    ban_until = models.DateTimeField(null=True, blank=True)
+    ban_until = models.DateTimeField(null=True, blank=True, db_index=True)
     forget_attempts = models.IntegerField(default=0)
     public_key = models.TextField(blank=True, null=True)
     is_2fa_enabled = models.BooleanField(default=False)
@@ -121,6 +122,12 @@ class User(AbstractBaseUser):
     
     USERNAME_FIELD = 'username'
     REQUIRED_FIELDS = ['email']
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['login_failed_attempts']),
+            models.Index(fields=['created_at']),
+        ]
     
     def __str__(self):
         return self.username
@@ -178,14 +185,16 @@ class OTPPurpose(models.TextChoices):
     RESET_PASSWORD = "reset_password", "Reset Password"
     TWO_FACTOR = "2fa", "Two-Factor Authentication"
     VERIFICATION = "verification", "Account Verification"
+
+
 class OTP(models.Model):
     id = models.UUIDField(primary_key=True, unique=True, default=uuid.uuid4)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps')
-    code = models.CharField(max_length=6, null=True, blank=True)
-    purpose = models.CharField(max_length=40, choices=OTPPurpose.choices, default=OTPPurpose.VERIFICATION)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps', db_index=True)
+    code = models.CharField(max_length=6, null=True, blank=True, db_index=True)
+    purpose = models.CharField(max_length=40, choices=OTPPurpose.choices, default=OTPPurpose.VERIFICATION, db_index=True)
     refreshes_at = models.DateTimeField(null=True, blank=True)
-    expires_at = models.DateTimeField(null=True, blank=True)
-    is_used = models.BooleanField(default=False)
+    expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    is_used = models.BooleanField(default=False, db_index=True)
     last_refreshed_at = models.DateTimeField(null=True, blank=True)
     refresh_attempts = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -193,6 +202,12 @@ class OTP(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            # Composite index for finding valid OTPs
+            models.Index(fields=['user', 'purpose', 'is_used'], name='user_purpose_used_idx'),
+            # Composite index for expiration checks
+            models.Index(fields=['is_used', 'expires_at'], name='used_expires_idx'),
+        ]
     
     def __str__(self):
         return f"OTP ({self.purpose}) for {self.user.username}"
