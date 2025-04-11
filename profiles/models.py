@@ -13,13 +13,20 @@ class Profile(models.Model):
     id = models.UUIDField(primary_key=True, unique=True, default=uuid.uuid4)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
     status = models.CharField(max_length=100, null=True, blank=True)
-    display_name = models.CharField(max_length=60, null=True, blank=True)
+    display_name = models.CharField(max_length=60, null=True, blank=True, db_index=True)
     bio = models.TextField(default="Hello, I'm really into funlife messenger :)")
-    is_online = models.BooleanField(default=False)
+    is_online = models.BooleanField(default=False, db_index=True)
     
-    last_seen = models.DateTimeField(null=True, blank=True)
+    last_seen = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['created_at']),
+            # Composite index for status and is_online (common filter combination)
+            models.Index(fields=['is_online', 'last_seen'], name='online_seen_idx'),
+        ]
     
     def __str__(self):
         return f"Profile of {self.user.username} - {self.is_online}"
