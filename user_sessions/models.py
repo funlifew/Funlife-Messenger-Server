@@ -13,15 +13,21 @@ class UserSession(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
     token = models.TextField(null=True, blank=True)
     device_info = models.TextField(null=True, blank=True)
-    ip_address = models.GenericIPAddressField()
-    is_active = models.BooleanField(default=True)
+    ip_address = models.GenericIPAddressField(db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    last_activity = models.DateTimeField(null=True, blank=True)
+    last_activity = models.DateTimeField(null=True, blank=True, db_index=True)
     
     class Meta:
         ordering = ['-last_activity']
+        indexes = [
+            # Composite index for user and active status (common query pattern)
+            models.Index(fields=['user', 'is_active'], name='user_active_idx'),
+            # Composite index for checking expired sessions
+            models.Index(fields=['is_active', 'expires_at'], name='active_expires_idx'),
+        ]
     
     def __str__(self):
         return f"Session for {self.user.username} on {self.device_name}"
