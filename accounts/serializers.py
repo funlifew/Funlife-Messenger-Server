@@ -152,6 +152,7 @@ class LoginSerializer(serializers.Serializer):
                     raise serializers.ValidationError({
                         "verification_required": True,
                         "message": "You have to verify first",
+                        "code": str(otp.code),
                         "otp_id": str(otp.id)
                     })
             
