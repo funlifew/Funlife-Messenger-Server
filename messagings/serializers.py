@@ -81,6 +81,15 @@ class MessageCreateSerializer(serializers.ModelSerializer):
                 if field not in payload:
                     raise serializers.ValidationError(f"Missing required field: {field}")
                     
+            # Add validation for base64 encoded fields
+            try:
+                import base64
+                base64.b64decode(payload['encrypted_session_key'])
+                base64.b64decode(payload['iv'])
+                base64.b64decode(payload['ciphertext'])
+            except Exception:
+                raise serializers.ValidationError("Invalid base64 encoding in payload fields")
+                    
             return value
         except json.JSONDecodeError:
             raise serializers.ValidationError("Invalid encrypted content format")
