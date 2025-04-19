@@ -13,13 +13,16 @@ django.setup()  # <-- Add this line to configure Django settings
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
+from messagings.middlewares import JWTMiddleware
 import messagings.routing
 
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),
     "websocket": AuthMiddlewareStack(
-        URLRouter(
-            messagings.routing.websocket_urlpatterns
+        JWTMiddleware(
+            URLRouter(
+                messagings.routing.websocket_urlpatterns
+            )
         )
     ),
 })
