@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db.models import Q
@@ -37,11 +37,13 @@ class Message(models.Model):
     # Message status fields
     is_read = models.BooleanField(default=False, db_index=True)
     is_delivered = models.BooleanField(default=False, db_index=True)
+    is_deleted = models.BooleanField(default=False, db_index=True)
     
     # Message metadata
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
     read_at = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     
     class Meta:
         ordering = ['created_at']
@@ -77,8 +79,8 @@ class Message(models.Model):
         if self.is_read and not self.read_at:
             self.read_at = timezone.now()
             
-        super().save(*args, **kwargs)
     
+        super().save(*args, **kwargs)
     def _check_friendship_status(self):
         """Check if sender and receiver are friends"""
         friendship = Friendship.get_friendship(self.sender, self.receiver)
@@ -112,6 +114,13 @@ class Message(models.Model):
             self.save(update_fields=['is_read', 'read_at', 'is_delivered', 'delivered_at'])
             return True
         return False
+
+    def soft_delete(self):
+        """Soft delete a message"""
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        self.save(update_fields=['is_deleted', 'deleted_at'])
+        return True
     
     @classmethod
     def get_conversation(cls, user1, user2, limit=50, offset=0):
@@ -127,6 +136,7 @@ class Message(models.Model):
             return messages[offset:offset+limit]
         return messages
     
+    @classmethod
     def get_unread_count(cls, user):
         """Get count of unread messages for a user"""
         return cls.objects.filter(receiver=user, is_read=False).count()
@@ -206,11 +216,13 @@ class TypingStatus(models.Model):
         if not Friendship.are_friends(user, recipient):
             return None
             
-        obj, created = cls.objects.update_or_create(
-            user=user,
-            recipient=recipient,
-            defaults={'is_typing': is_typing, 'timestamp': timezone.now()}
-        )
+        # Use select_for_update to prevent race conditions
+        with transaction.atomic():
+            obj, created = cls.objects.select_for_update().update_or_create(
+                user=user,
+                recipient=recipient,
+                defaults={'is_typing': is_typing, 'timestamp': timezone.now()}
+            )
         return obj
     
     @classmethod
