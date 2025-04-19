@@ -12,6 +12,7 @@ urlpatterns = [
     # Message status updates
     path('read/<uuid:message_id>/', views.MarkMessageReadView.as_view(), name='mark_read'),
     path('read-all/<uuid:user_id>/', views.MarkAllMessagesReadView.as_view(), name='mark_all_read'),
+    path('delete/<uuid:message_id>/', views.DeleteMessageView.as_view(), name='delete_message'),
     
     # Typing status
     path('typing/update/', views.TypingStatusUpdateView.as_view(), name='update_typing_status'),
