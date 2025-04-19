@@ -26,7 +26,7 @@ class SendMessageView(generics.CreateAPIView):
     
     def perform_create(self, serializer):
         """Save the sender with the message"""
-        serializer.save()
+        return serializer.save()
         
     def create(self, request, *args, **kwargs):
         """Create a new message with detailed response"""
@@ -296,3 +296,30 @@ class GetPublicKeyView(APIView):
                 }, status=status.HTTP_400_BAD_REQUEST)
                 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class DeleteMessageView(APIView):
+    """Soft delete a message"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, message_id):
+        """Delete a message"""
+        user = request.user
+        
+        try:
+            # Find the message
+            message = Message.objects.get(
+                Q(sender=user) | Q(receiver=user),
+                id=message_id
+            )
+            
+            # Soft delete the message
+            message.soft_delete()
+            
+            return Response({
+                'message': 'Message deleted successfully'
+            })
+            
+        except Message.DoesNotExist:
+            return Response({
+                'error': 'Message not found'
+            }, status=status.HTTP_404_NOT_FOUND)
