@@ -1,0 +1,227 @@
+import json
+from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.db import database_sync_to_async
+from django.contrib.auth import get_user_model
+from .models import Message, TypingStatus
+from friendships.models import Friendship
+
+User = get_user_model()
+
+class MessageConsumer(AsyncWebsocketConsumer):
+    """Websocket consumer for real-time messaging"""
+    
+    async def connect(self):
+        """Handle WebSocket connection"""
+        self.user = self.scope['user']
+        
+        # Anonymous users can't connect
+        self._check_for_user_anonymous()
+        
+        # Get User ID from the URL route
+        self.room_name = self.scope['url_route']['kwargs']['user_id']
+        self.room_group_name = f'chat{self.room_name}'
+        
+        # Check if the users are friend
+        other_user = await self.get_user_by_id(self.room_name)
+        if not other_user or not await self.are_friends(self.user, other_user):
+            return await self.close()
+        
+        # Store the other user
+        self.other_user = other_user
+        
+        # Also join the user's personal notification group
+        self.user_group_name = f'user_{self.user.id}'
+        await self.channel_layer.group_add(
+            self.user_group_name,
+            self.channel_name
+        )
+        
+        await self.accept()
+        
+    
+    async def disconnect(self, close_code):
+        """Handle WebSocket disconnection"""
+        # Leave the room group
+        if hasattr(self, 'room_group_name'):
+            await self.channel_layer.group_discard(
+                self.room_group_name,
+                self.channel_name
+            )
+        
+        # Leave the user's personal group
+        if hasattr(self, 'user_group_name'):
+            await self.channel_layer.group_discard(
+                self.user_group_name,
+                self.channel_name
+            )
+            
+        # Update typing status to False
+        if hasattr(self, 'other_user'):
+            await self.update_typing_status(False)
+    
+    async def receive(self, text_data):
+        """Handle incoming WebSocket messages"""
+        try:
+            data = json.loads(text_data)
+            message_type = data.get('type')
+            
+            if message_type == 'message':
+                # Handle new message
+                await self.handle_new_message(data)
+            elif message_type == 'typing':
+                # Handle typing status update
+                await self.handle_typing_status(data)
+            elif message_type == 'read':
+                # Handle message read status update
+                await self.handle_read_status(data)
+            
+        except json.JSONDecodeError:
+            pass
+    
+    async def handle_new_message(self, data):
+        """Handle a new message from the client"""
+        encrypted_content = data.get('encrypted_content')
+        
+        if not encrypted_content:
+            return
+        
+        # Create message in database
+        message = await self.create_message(encrypted_content)
+        
+        if message:
+            # Send message to room group
+            await self.channel_layer.group_send(
+                f'user_{self.other_user.id}',  # Send to the other user's personal group
+                {
+                    'type': 'chat_message',
+                    'message_id': str(message.id),
+                    'sender_id': str(self.user.id),
+                    'sender_username': self.user.username,
+                    'receiver_id': str(self.other_user.id),
+                    'encrypted_content': encrypted_content,
+                    'created_at': message.created_at.isoformat(),
+                }
+            )
+    
+    async def handle_typing_status(self, data):
+        """Handle typing status update"""
+        is_typing = data.get('is_typing', False)
+        
+        # Update typing status in database
+        await self.update_typing_status(is_typing)
+        
+        # Broadcast typing status to other user
+        await self.channel_layer.group_send(
+            f'user_{self.other_user.id}',  # Send to the other user's personal group
+            {
+                'type': 'typing_status',
+                'user_id': str(self.user.id),
+                'username': self.user.username,
+                'is_typing': is_typing,
+                'recipient_id': str(self.other_user.id)
+            }
+        )
+    
+    
+    async def handle_read_status(self, data):
+        """Handle message read status update"""
+        message_id = data.get('message_id')
+        
+        if not message_id:
+            return
+        
+        # Update read status in database
+        success = await self.mark_message_read(message_id)
+        
+        if success:
+            # Broadcast read status to sender
+            await self.channel_layer.group_send(
+                f'user_{self.other_user.id}',  # Send to the other user's personal group
+                {
+                    'type': 'read_receipt',
+                    'message_id': message_id,
+                    'user_id': str(self.user.id),
+                    'username': self.user.username
+                }
+            )
+    
+    async def chat_message(self, event):
+        """Send message to WebSocket"""
+        await self.send(text_data=json.dumps({
+            'type': 'message',
+            'message_id': event['message_id'],
+            'sender_id': event['sender_id'],
+            'sender_username': event['sender_username'],
+            'receiver_id': event['receiver_id'],
+            'encrypted_content': event['encrypted_content'],
+            'created_at': event['created_at']
+        }))
+    
+    async def typing_status(self, event):
+        """Send typing status to WebSocket"""
+        await self.send(text_data=json.dumps({
+            'type': 'typing',
+            'user_id': event['user_id'],
+            'username': event['username'],
+            'is_typing': event['is_typing'],
+            'recipient_id': event['recipient_id']
+        }))
+    
+    async def read_receipt(self, event):
+        """Send read receipt to WebSocket"""
+        await self.send(text_data=json.dumps({
+            'type': 'read_receipt',
+            'message_id': event['message_id'],
+            'user_id': event['user_id'],
+            'username': event['username']
+        }))
+    
+    # Database access methods
+    
+    @database_sync_to_async
+    def get_user_by_id(self, user_id):
+        """Get a user by ID"""
+        try:
+            return User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return None
+    
+    @database_sync_to_async
+    def are_friends(self, user1, user2):
+        """Check if two users are friends"""
+        return Friendship.are_friends(user1, user2)
+    
+    @database_sync_to_async
+    def create_message(self, encrypted_content):
+        """Create a new message in the database"""
+        try:
+            return Message.objects.create(
+                sender=self.user,
+                receiver=self.other_user,
+                encrypted_content=encrypted_content
+            )
+        except Exception:
+            return None
+    
+    @database_sync_to_async
+    def update_typing_status(self, is_typing):
+        """Update typing status in the database"""
+        TypingStatus.set_typing(self.user, self.other_user, is_typing)
+    
+    @database_sync_to_async
+    def mark_message_read(self, message_id):
+        """Mark a message as read"""
+        try:
+            message = Message.objects.get(
+                id=message_id,
+                sender=self.other_user,
+                receiver=self.user
+            )
+            return message.mark_as_read()
+        except Message.DoesNotExist:
+            return False
+    
+    async def _check_for_user_anonymous(self):
+        """Anonymous users cannot be connected to server"""
+        if self.user.is_anonymous:
+            return await self.close()
