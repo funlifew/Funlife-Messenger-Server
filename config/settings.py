@@ -33,6 +33,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -41,6 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'channels',
+    'channels_redis',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     
@@ -166,7 +168,7 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),  # Short lifetime for security
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=13),  # Short lifetime for security
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),     # Longer refresh lifetime
     'ROTATE_REFRESH_TOKENS': True,                   # Generate new refresh token when refreshed
     'BLACKLIST_AFTER_ROTATION': True,                # Blacklist old refresh tokens
@@ -188,4 +190,17 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=15),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=7),
+}
+
+# ASGI settings application
+ASGI_APPLICATION = 'config.asgi.application'
+
+# Channel Layers for WebSocket Support
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],
+        },
+    },
 }
