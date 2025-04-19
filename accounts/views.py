@@ -84,7 +84,6 @@ class LoginView(APIView):
         
         # Get authenticated user
         user = serializer.validated_data 
-        print(user)
         
         # check if 2FA is enabled
         if user.is_2fa_enabled:
@@ -106,7 +105,8 @@ class LoginView(APIView):
             'message': 'Login successful',
             'tokens': tokens,
             'user': UserSerializer(user).data,
-            'session_id': str(session.id)
+            'session_id': str(session.id),
+            'session_expires': session.expires_at
         }, status=status.HTTP_200_OK)
     
     def _create_user_2fa(self, user):
@@ -256,6 +256,7 @@ class TwoFactorVerifyView(APIView):
             "tokens": tokens,
             "user": UserSerializer(user).data,
             "session_id": str(session.id),
+            "session_expires": session.expires_at
         }, status=status.HTTP_200_OK)
 
 class TwoFactorSetupView(APIView):
