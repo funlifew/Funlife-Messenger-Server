@@ -1,1 +1,2 @@
 from utils.password_validator import PasswordValidator
+from utils.encryption import E2EEncryption
