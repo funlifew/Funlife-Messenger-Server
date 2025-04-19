@@ -288,13 +288,16 @@ class MessageConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def are_friends(self, user1, user2):
         """Check if two users are friends or if it's the same user"""
-        # Allow connection to self (for testing purposes)
-        if user1.id == user2.id:
+        # Check for self-connection first
+        if str(user1.id) == str(user2.id):
             print(f"Self-connection detected for user {user1.username}")
             return True
-            
-        # Original friendship check
-        return Friendship.are_friends(user1, user2)
+                
+        # Check friendship
+        are_friends = Friendship.are_friends(user1, user2)
+        if not are_friends:
+            print(f"Users are not friends: {user1.username} and {user2.username}")
+        return are_friends
     
     @database_sync_to_async
     def create_message(self, encrypted_content):
