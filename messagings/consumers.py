@@ -4,6 +4,8 @@ from channels.db import database_sync_to_async
 from django.contrib.auth import get_user_model
 from .models import Message, TypingStatus
 from friendships.models import Friendship
+from django.utils import timezone
+from django.db.models import Q
 
 User = get_user_model()
 
@@ -15,7 +17,9 @@ class MessageConsumer(AsyncWebsocketConsumer):
         self.user = self.scope['user']
         
         # Anonymous users can't connect
-        self._check_for_user_anonymous()
+        if self.user.is_anonymous:
+            await self.close()
+            return
         
         # Get User ID from the URL route
         self.room_name = self.scope['url_route']['kwargs']['user_id']
@@ -74,9 +78,64 @@ class MessageConsumer(AsyncWebsocketConsumer):
             elif message_type == 'read':
                 # Handle message read status update
                 await self.handle_read_status(data)
+            elif message_type == 'delete':
+                # Handle message deletion
+                await self.handle_delete_message(data)
             
         except json.JSONDecodeError:
             pass
+
+    async def handle_delete_message(self, data):
+        """Handle message deletion request"""
+        message_id = data.get('message_id')
+        
+        if not message_id:
+            return
+        
+        # Delete message in database
+        success = await self.delete_message(message_id)
+        
+        if success:
+            # Notify both users about the deletion
+            deletion_notification = {
+                'type': 'message_deleted',
+                'message_id': message_id,
+                'deleted_by': str(self.user.id),
+                'timestamp': timezone.now().isoformat()
+            }
+            
+            # Notify the other user
+            await self.channel_layer.group_send(
+                f'user_{self.other_user.id}',
+                deletion_notification
+            )
+            
+            # Notify the current user
+            await self.channel_layer.group_send(
+                f'user_{self.user.id}',
+                deletion_notification
+            )
+
+    async def message_deleted(self, event):
+        """Send message deletion notification to WebSocket"""
+        await self.send(text_data=json.dumps({
+            'type': 'message_deleted',
+            'message_id': event['message_id'],
+            'deleted_by': event['deleted_by'],
+            'timestamp': event['timestamp']
+        }))
+
+    @database_sync_to_async
+    def delete_message(self, message_id):
+        """Delete a message in the database"""
+        try:
+            message = Message.objects.get(
+                Q(sender=self.user) | Q(receiver=self.user),
+                id=message_id
+            )
+            return message.soft_delete()
+        except Message.DoesNotExist:
+            return False
     
     async def handle_new_message(self, data):
         """Handle a new message from the client"""
@@ -100,6 +159,7 @@ class MessageConsumer(AsyncWebsocketConsumer):
                     'receiver_id': str(self.other_user.id),
                     'encrypted_content': encrypted_content,
                     'created_at': message.created_at.isoformat(),
+                    "is_sent": True,
                 }
             )
     
