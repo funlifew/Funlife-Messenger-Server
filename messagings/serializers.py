@@ -26,9 +26,6 @@ class MessageSerializer(serializers.ModelSerializer):
 class MessageCreateSerializer(serializers.ModelSerializer):
     """
     Serializer for creating a new encrypted message
-    
-    The plaintext content should already be encrypted by the client
-    using the recipient's public key before submitting.
     """
     receiver_id = serializers.UUIDField(required=True)
     encrypted_content = serializers.CharField(required=True)
