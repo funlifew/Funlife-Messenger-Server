@@ -178,6 +178,55 @@ class User(AbstractBaseUser):
         self.login_failed_attempts = 0
         self.forget_attempts = 0
         self.save()
+    
+    # Encryption session
+    def generate_keys(self):
+        """Generate a new key pair for this user"""
+        from utils.encryption import E2EEncryption
+        
+        # Generate keys
+        private_key, public_key = E2EEncryption.generate_key_pair()
+        
+        # Store only the public key in the database
+        self.public_key = public_key
+        self.save(update_fields=['public_key'])
+        
+        # Return the private key (to be stored securely by the client)
+        return private_key
+
+    def encrypt_message_for(self, recipient, plaintext):
+        """
+        Encrypt a message for a recipient
+        
+        Args:
+            recipient: User object (the message recipient)
+            plaintext: str (the message to encrypt)
+        
+        Returns:
+            str: Encrypted message JSON payload
+        """
+        from utils.encryption import E2EEncryption
+        
+        if not recipient.public_key:
+            raise ValueError("Recipient has no public key")
+        
+        return E2EEncryption.encrypt_message(plaintext, recipient.public_key)
+
+    @staticmethod
+    def decrypt_message(encrypted_payload, private_key):
+        """
+        Decrypt a message using a private key
+        
+        Args:
+            encrypted_payload: str (JSON payload from encrypt_message)
+            private_key: str (PEM-encoded private key)
+            
+        Returns:
+            str: Decrypted message
+        """
+        from utils.encryption import E2EEncryption
+        
+        return E2EEncryption.decrypt_message(encrypted_payload, private_key)
 
 class OTPPurpose(models.TextChoices):
     """OTP purposes enumeration"""
