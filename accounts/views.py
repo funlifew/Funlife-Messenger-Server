@@ -116,30 +116,6 @@ class LoginView(APIView):
     def _delete_all_user_2fa_otps(self, user):
         return OTP.objects.filter(user=user, purpose=OTPPurpose.TWO_FACTOR).delete()
 
-class TwoFactorVerifyView(APIView):
-    """Handle 2FAs"""
-    permission_classes = [permissions.AllowAny]
-    
-    def post(self, request):
-        serializer = TwoFactorVerifySerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        # get user from validated OTP
-        user = serializer.validated_data['user']
-        
-        # create a session
-        session = create_user_session(user, request)
-        
-        # generate JWT token for user
-        tokens = get_tokens_for_user(user)
-        
-        return Response({
-            'message': 'Two-factor authentication successful',
-            'tokens': tokens,
-            'user': UserSerializer(user).data,
-            'session_id': str(session.id)
-        }, status=status.HTTP_200_OK)
-
 class LogoutView(APIView):
     """Handle user logout"""
     permission_classes = [permissions.IsAuthenticated]
@@ -281,6 +257,7 @@ class TwoFactorVerifyView(APIView):
             "user": UserSerializer(user).data,
             "session_id": str(session.id),
         }, status=status.HTTP_200_OK)
+
 class TwoFactorSetupView(APIView):
     """Setup or disable 2FA"""
     permission_classes = [permissions.IsAuthenticated]
