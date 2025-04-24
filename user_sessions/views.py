@@ -5,6 +5,9 @@ from django.shortcuts import get_object_or_404
 from .models import UserSession
 from .serializers import UserSessionSerializer, SessionUpdateSerializer
 
+from security_logs.utils import SecurityLogger
+from security_logs.models import EventType
+
 # Create your views here.
 class UserSessionListView(generics.ListAPIView):
     """List all active sessions for the current user"""
@@ -81,8 +84,16 @@ class InvalidateAllSessionsView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
+        
         # Invalidate all other sessions
         UserSession.invalidate_all_sessions(request.user, exclude_id=current_session_id)
+        
+        # Log session invalidation
+        SecurityLogger.log_account_event(
+            user=request.user, 
+            event_type=EventType.ALL_SESSIONS_INVALIDATE, 
+            request=request
+        )
         
         return Response({
             "message": "All other sessions have been logged out"
