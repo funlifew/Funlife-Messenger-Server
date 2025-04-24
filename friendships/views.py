@@ -12,6 +12,9 @@ from .serializers import (
 )
 from profiles.models import Profile
 
+from security_logs.utils import SecurityLogger
+from security_logs.models import EventType
+
 User = get_user_model()
 
 class FriendListView(generics.ListAPIView):
@@ -79,6 +82,13 @@ class SendFriendRequestView(views.APIView):
                 status=FriendshipStatus.PENDING
             )
             
+            # After successfully creating friendship
+            SecurityLogger.log_friend_event(
+                user=request.user,
+                friend=friend,  # This should be the friend object from your code
+                event_type=EventType.FRIEND_REQUEST_SENT,
+                request=request
+            )
             return Response({
                 'message': f'Friend request sent to {friend.username}',
                 'friendship': FriendshipSerializer(friendship).data
