@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'backups',
     'user_sessions',
     'friendships',
+    'security_logs',
 ]
 
 MIDDLEWARE = [
@@ -63,6 +64,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'user_sessions.middleware.SessionActivityMiddleware',
+    'security_logs.middleware.SecurityLoggingMiddleware'
 ]
 
 ROOT_URLCONF = 'config.urls'
