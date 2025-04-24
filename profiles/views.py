@@ -6,6 +6,9 @@ from django.utils import timezone
 from .models import Profile
 from .serializers import ProfileSerializer
 
+from security_logs.utils import SecurityLogger
+from security_logs.models import EventType
+
 # Create your views here.
 class ProfileDetailView(generics.RetrieveUpdateAPIView):
     """User's Profile showing up and also update included"""
@@ -22,6 +25,14 @@ class ProfileDetailView(generics.RetrieveUpdateAPIView):
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
+        
+        # Log profile update
+        SecurityLogger.log_account_event(
+            user=request.user,
+            event_type=EventType.PROFILE_UPDATE,
+            request=request,
+            details={"updated_fields": list(request.data.keys())}
+        )
         
         return Response(serializer.data)
     
