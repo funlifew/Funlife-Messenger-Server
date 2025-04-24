@@ -16,6 +16,8 @@ from .serializers import (
     PublicKeySerializer
 )
 from friendships.models import Friendship
+from security_logs.utils import SecurityLogger
+from security_logs.models import EventType
 
 User = get_user_model()
 
@@ -33,6 +35,14 @@ class SendMessageView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         message = self.perform_create(serializer)
+        
+        # After successfully sending a message
+        SecurityLogger.log_message_event(
+            user=request.user,
+            message_id=message.id,  # This should be your message object ID
+            event_type=EventType.MESSAGE_SEND,
+            request=request
+        )
         
         # Return the created message
         return Response({
