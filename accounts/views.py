@@ -22,6 +22,8 @@ from .serializers import (
     TwoFactorVerifySerializer,
 )
 from user_sessions.models import UserSession
+from security_logs.utils import SecurityLogger
+from security_logs.models import EventType
 from django.conf import settings
 import pyotp
 
@@ -101,6 +103,9 @@ class LoginView(APIView):
         # generate JWT token
         tokens = get_tokens_for_user(user)
         
+        # Log successful login
+        SecurityLogger.log_authentication(user=user, success=True, request=request)
+        
         return Response({
             'message': 'Login successful',
             'tokens': tokens,
@@ -129,6 +134,12 @@ class LogoutView(APIView):
             try:
                 session = UserSession.objects.get(id=session_id, user=request.user)
                 session.invalidate()
+                # Log logout event
+                SecurityLogger.log_account_event(
+                    user=request.user, 
+                    event_type=EventType.LOGOUT, 
+                    request=request
+                )
                 return Response({'message': 'Session logged out successfully'}, status=status.HTTP_200_OK)
             except UserSession.DoesNotExist:
                 return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -229,6 +240,13 @@ class ChangePasswordView(APIView):
         if current_session_id:
             UserSession.invalidate_all_sessions(user, exclude_id=current_session_id)
         
+        # After successfully changing password
+        SecurityLogger.log_account_event(
+            user=request.user,
+            event_type=EventType.PASSWORD_CHANGE,
+            request=request
+        )
+        
         return Response({
             'message': 'Password changed successfully'
         }, status=status.HTTP_200_OK)
@@ -279,6 +297,17 @@ class TwoFactorSetupView(APIView):
             otp_secret = settings.OTP_SECRET
             totp = pyotp.TOTP(otp_secret)
             current_otp = totp.now()
+            
+            if enable:
+                event_type = EventType.TWO_FACTOR_ENABLE
+            else:
+                event_type = EventType.TWO_FACTOR_DISABLE
+                
+            SecurityLogger.log_account_event(
+                user=request.user,
+                event_type=event_type,
+                request=request
+            )
             
             return Response({
                 'message': 'Two-factor authentication enabled successfully',
