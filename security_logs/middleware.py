@@ -106,5 +106,24 @@ class SecurityLoggingMiddleware(MiddlewareMixin):
             except Exception:
                 # Don't let logging errors affect the response
                 pass
+            
+        # Log backup download attempts
+        elif request.path.startswith('/api/backups/download/'):
+            try:
+                user = request.user if request.user.is_authenticated else None
+                if user:
+                    SecurityLogger.log_account_event(
+                        user=user,
+                        event_type=EventType.BACKUP_ACCESS,
+                        request=request,
+                        details={
+                            'path': request.path,
+                            'method': request.method,
+                            'status_code': response.status_code
+                        }
+                    )
+            except Exception:
+                # Don't let logging errors affect the response
+                pass
         
         return response
