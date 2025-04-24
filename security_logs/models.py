@@ -65,6 +65,13 @@ class EventType(models.TextChoices):
     SUSPICIOUS_ACTIVITY = "suspicious_activity", "Suspicious Activity"
     ADMIN_ACTION = "admin_action", "Administrative Action"
 
+    # Backup events
+    BACKUP_CREATE = "backup_create", "Backup Created"
+    BACKUP_DOWNLOAD = "backup_download", "Backup Downloaded"
+    BACKUP_DELETE = "backup_delete", "Backup Deleted"
+    BACKUP_ACCESS = "backup_access", "Backup Access Attempt"
+    BACKUP_DECRYPT = "backup_decrypt", "Backup Decrypted"
+
 
 class SecurityLog(models.Model):
     """Model for storing security-related events"""
