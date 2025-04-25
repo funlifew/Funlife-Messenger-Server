@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'user_sessions',
     'friendships',
     'security_logs',
+    'realtime',
 ]
 
 MIDDLEWARE = [
