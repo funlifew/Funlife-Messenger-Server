@@ -17,6 +17,8 @@ A super-secure, privacy-focused messenger application built with Django and webs
 - 🛡️ Enhanced security with rate limiting, key rotation, and more
 - 💾 Encrypted data backups
 - 📊 Security logging and monitoring
+- 📧 Comprehensive email notifications for important events
+- 🔔 Security alerts for suspicious activities
 
 ## 💻 Tech Stack
 
@@ -26,6 +28,7 @@ A super-secure, privacy-focused messenger application built with Django and webs
 - **Authentication**: JWT (djangorestframework-simplejwt)
 - **Encryption**: Cryptography library
 - **OTP**: PyOTP
+- **Email**: SMTP with HTML templates
 - **Package Management**: Poetry
 
 ## 📋 Project Structure
@@ -36,17 +39,21 @@ A super-secure, privacy-focused messenger application built with Django and webs
  ┣ 📂 backups                  # Encrypted user data backups
  ┃ ┣ 📂 management
  ┃ ┃ ┗ 📂 commands             # Management commands like backup cleanup
- ┣ 📂 config                    # Project settings and configuration
+ ┣ 📂 config                   # Project settings and configuration
  ┣ 📂 friendships              # Friend requests and relationship management
  ┣ 📂 messagings               # Core messaging functionality
  ┣ 📂 profiles                 # User profile management
  ┣ 📂 realtime                 # WebSocket consumers for real-time features
  ┃ ┣ 📂 consumers              # WebSocket consumers for different features
  ┣ 📂 security_logs            # Security event logging and monitoring
- ┣ 📂 templates                # HTML templates (backup viewer)
+ ┣ 📂 templates                # HTML templates for emails and backups
  ┃ ┣ 📂 backups
+ ┃ ┣ 📂 emails                 # Email notification templates
  ┣ 📂 user_sessions            # Session management and device tracking
  ┣ 📂 utils                    # Utility functions and helpers
+ ┃ ┣ 📜 encryption.py          # End-to-end encryption utilities
+ ┃ ┣ 📜 email_service.py       # Email service for notifications
+ ┃ ┣ 📜 password_validator.py  # Password validation utilities
  ┣ 📜 .env.example             # Example environment variables
  ┣ 📜 .gitignore               # Git ignore file
  ┣ 📜 LICENSE                  # MIT License
@@ -63,6 +70,7 @@ A super-secure, privacy-focused messenger application built with Django and webs
 - Python 3.12+
 - Redis server (for Channels)
 - Poetry (for dependency management)
+- SMTP server (for sending emails)
 
 ### Installation
 
@@ -104,6 +112,18 @@ poetry run python manage.py createsuperuser
 poetry run python manage.py runserver
 ```
 
+## 📧 Email Features
+
+FunLife Messenger includes a comprehensive email notification system that keeps users informed about important account activities:
+
+- 📨 Account verification emails with OTP codes
+- 🔑 Password reset emails with secure links
+- 🔔 Login notifications for new devices or locations
+- 🛡️ Security alerts for suspicious activities
+- 🔐 Two-factor authentication setup notifications
+
+Email templates are fully customizable and responsive, ensuring users receive well-formatted notifications on any device.
+
 ## 🔒 Security Features
 
 - 🛡️ End-to-end encryption using asymmetric (RSA) and symmetric (AES) encryption
@@ -115,6 +135,7 @@ poetry run python manage.py runserver
 - 🔄 OTP with refresh capability
 - 💾 Encrypted backups
 - 🔒 Friend request verification
+- 📧 Security event email notifications
 
 ## 📚 Documentation
 
