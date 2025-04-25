@@ -6,6 +6,9 @@ from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from utils.email_service import EmailService
+from datetime import datetime
+
 
 from .models import OTP, OTPPurpose
 from .serializers import (
@@ -53,6 +56,9 @@ def create_user_session(user, request):
     # Store device info
     session.store_device_info(user_agent=user_agent)
     
+    # Notify user about the new session (removed from LoginView to prevent duplication)
+    session.notify_session_created()
+    
     return session
 
 # Create your views here.
@@ -70,10 +76,13 @@ class RegisterView(generics.CreateAPIView):
         # OTP creation
         otp = OTP.objects.create(user=user, purpose=OTPPurpose.VERIFICATION)
 
+        # Send verification email
+        context = {'current_year': datetime.now().year}
+        EmailService.send_verification_email(user, otp)
+        
         return Response({
             'message': 'User registered successfully. Please verify your email.',
             'otp_id': str(otp.id),
-            'code': otp.code  # Only for testing! Remove in production
         }, status=status.HTTP_201_CREATED)
 
 class LoginView(APIView):
@@ -93,7 +102,6 @@ class LoginView(APIView):
             return Response({
                 '2fa_required': True,
                 'otp_id': str(otp.id),
-                'code': otp.code,  # Only for testing! Remove in production
                 'message': 'Two-factor authentication required.'
             }, status=status.HTTP_200_OK)
         
@@ -105,6 +113,8 @@ class LoginView(APIView):
         
         # Log successful login
         SecurityLogger.log_authentication(user=user, success=True, request=request)
+        
+        # Email is sent in create_user_session function so we removed it from here
         
         return Response({
             'message': 'Login successful',
@@ -184,12 +194,13 @@ class PasswordResetRequestView(APIView):
             # Generate reset OTP
             otp = OTP.objects.create(user=user, purpose=OTPPurpose.RESET_PASSWORD)
             
-            # In production, send this via email
-            # For testing, include in response
+            # Send password reset email
+            context = {'current_year': datetime.now().year}
+            EmailService.send_password_reset_email(user, otp)
+
             return Response({
                 'message': 'Password reset link sent to your email',
                 'otp_id': str(otp.id),
-                'code': otp.code  # Only for testing! Remove in production
             }, status=status.HTTP_200_OK)
         else:
             # Don't reveal if email exists or not for security
@@ -298,6 +309,15 @@ class TwoFactorSetupView(APIView):
             totp = pyotp.TOTP(otp_secret)
             current_otp = totp.now()
             
+            # Send notification email
+            try:
+                EmailService.send_2fa_enabled_notification(user)
+            except Exception as e:
+                # Log error but continue
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to send 2FA notification: {str(e)}")
+            
             if enable:
                 event_type = EventType.TWO_FACTOR_ENABLE
             else:
@@ -311,7 +331,7 @@ class TwoFactorSetupView(APIView):
             
             return Response({
                 'message': 'Two-factor authentication enabled successfully',
-                'test_code': current_otp  # TODO:  Only for testing! Remove in production
+                'test_code': current_otp  # TODO: Only for testing! Remove in production
             })
         else:
             # Disable 2FA (code validation happens in serializer)

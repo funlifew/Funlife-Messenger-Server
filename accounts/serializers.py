@@ -5,6 +5,8 @@ from django.contrib.auth import get_user_model, authenticate
 from django.utils import timezone
 from .models import OTP, OTPPurpose
 from django.utils.translation import gettext_lazy as _
+from utils.email_service import EmailService    
+from django.conf import settings
 
 User = get_user_model()
 
@@ -146,15 +148,25 @@ class LoginSerializer(serializers.Serializer):
                 raise serializers.ValidationError(_("User account is disabled."))
             
             if not user.is_verified:
-                if not user.is_verified:
-                    otp = create_new_otp(user.id)
-                    user.increment_failed()
-                    raise serializers.ValidationError({
-                        "verification_required": True,
-                        "message": "You have to verify first",
-                        "code": str(otp.code),
-                        "otp_id": str(otp.id)
-                    })
+                otp = create_new_otp(user.id)
+                user.increment_failed()
+                
+                # Send verification email
+                try:
+                    EmailService.send_verification_email(user, otp)
+                except Exception as e:
+                    # Log error but continue
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Failed to send verification email during login: {str(e)}")
+                
+                raise serializers.ValidationError({
+                    "verification_required": True,
+                    "message": "You have to verify first. A verification code has been sent to your email.",
+                    "otp_id": str(otp.id),
+                    # Only include code in DEBUG mode
+                    "code": str(otp.code) if settings.DEBUG else None
+                })
             
             # Set the authenticated user on the serializer
             data['user'] = user
@@ -201,6 +213,20 @@ class PasswordResetRequestSerializer(serializers.Serializer):
             return value
         except User.DoesNotExist:
             raise ValidationError("User not found.")
+    
+    def send_reset_email(self, user, otp):
+        """Send password reset email to the user"""
+        try:
+            # Generate a reset URL the user can click (optional)
+            reset_url = None
+            
+            # Send the password reset email
+            EmailService.send_password_reset_email(user, otp, reset_url)
+        except Exception as e:
+            # Log the error but don't expose it to the user
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to send password reset email: {str(e)}")
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
     """Serializer for confirming a password reset with OTP"""
