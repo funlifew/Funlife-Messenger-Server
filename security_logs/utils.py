@@ -1,6 +1,7 @@
 import json
 from django.utils import timezone
 from .models import SecurityLog, EventType, SeverityLevel
+from utils.email_service import EmailService
 
 class SecurityLogger:
     """
@@ -49,7 +50,7 @@ class SecurityLogger:
         if details:
             event_details.update(details)
         
-        return SecurityLog.log_event(
+        log = SecurityLog.log_event(
             event_type=event_type,
             user=user,
             ip_address=ip_address,
@@ -57,6 +58,12 @@ class SecurityLogger:
             severity=severity,
             details=event_details
         )
+        
+        # Notify user about failed login attempts
+        if not success and user:
+            cls.notify_critical_security_event(user, event_type, event_details)
+        
+        return log
     
     @classmethod
     def log_account_event(cls, user, event_type, request=None, details=None, severity=SeverityLevel.INFO):
@@ -164,7 +171,7 @@ class SecurityLogger:
         if details:
             event_details.update(details)
         
-        return SecurityLog.log_event(
+        log = SecurityLog.log_event(
             event_type=EventType.SUSPICIOUS_ACTIVITY,
             user=user,
             ip_address=ip_address,
@@ -172,3 +179,35 @@ class SecurityLogger:
             severity=SeverityLevel.WARNING,
             details=event_details
         )
+        
+        # Notify user about suspicious activity
+        if user:
+            cls.notify_critical_security_event(user, EventType.SUSPICIOUS_ACTIVITY, event_details)
+        
+        return log
+    
+    @classmethod
+    def notify_critical_security_event(cls, user, event_type, details=None):
+        """
+        Send email notification for critical security events
+        
+        Args:
+            user: User object
+            event_type: Security event type
+            details: Additional details
+        """
+        if not user or not user.email:
+            return
+            
+        # Only notify for certain event types
+        notify_events = [
+            EventType.ACCOUNT_LOCK,
+            EventType.FAILED_LOGIN,
+            EventType.PASSWORD_RESET,
+            EventType.SUSPICIOUS_ACTIVITY,
+            EventType.ALL_SESSIONS_INVALIDATE
+        ]
+        
+        # Check if event should trigger notification
+        if event_type in notify_events:
+            EmailService.send_security_alert(user, event_type, details)
