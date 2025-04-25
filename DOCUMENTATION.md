@@ -1,6 +1,6 @@
 # 📚 FunLife Messenger Documentation
 
-This document provides detailed technical documentation for the FunLife Messenger application, including architecture, models, and API endpoints.
+This document provides detailed technical documentation for the FunLife Messenger application, including architecture, models, API endpoints, and email notification system.
 
 ## 📋 Project Structure
 
@@ -87,9 +87,16 @@ This document provides detailed technical documentation for the FunLife Messenge
  ┃ ┣ 📜 urls.py                # URL routing
  ┃ ┣ 📜 utils.py               # Security logging utilities
  ┃ ┗ 📜 views.py               # API views
- ┣ 📂 templates                # HTML templates (backup viewer)
+ ┣ 📂 templates                # HTML templates (email and backup templates)
  ┃ ┣ 📂 backups
  ┃ ┃ ┗ 📜 backup_template.html # Backup HTML template
+ ┃ ┣ 📂 emails                 # Email templates
+ ┃ ┃ ┣ 📜 2fa_enabled.html     # 2FA enabled notification template
+ ┃ ┃ ┣ 📜 login_notification.html # New login notification template
+ ┃ ┃ ┣ 📜 password_reset.html  # Password reset template
+ ┃ ┃ ┣ 📜 security_alert.html  # Security alert template
+ ┃ ┃ ┣ 📜 verification.html    # Email verification template
+ ┃ ┃ ┗ 📜 verification_success.html # Email verification success template
  ┣ 📂 user_sessions            # Session management and device tracking
  ┃ ┣ 📂 migrations             # Database migrations
  ┃ ┣ 📜 admin.py               # Admin panel configuration
@@ -101,8 +108,11 @@ This document provides detailed technical documentation for the FunLife Messenge
  ┃ ┣ 📜 urls.py                # URL routing
  ┃ ┗ 📜 views.py               # API views
  ┣ 📂 utils                    # Utility functions and helpers
+ ┃ ┣ 📜 email_service.py       # Email sending service
  ┃ ┣ 📜 encryption.py          # End-to-end encryption utilities
- ┃ ┗ 📜 password_validator.py  # Password validation utilities
+ ┃ ┣ 📜 password_validator.py  # Password validation utilities
+ ┃ ┣ 📜 tests.py               # Email service tests
+ ┃ ┗ 📜 tests_email_integration.py # Integration tests for email features
 ```
 
 ## 🏛️ Architecture
@@ -113,7 +123,7 @@ FunLife Messenger follows a clean architecture approach with the following layer
 2. **Serializers**: Transform data between API and model formats
 3. **Views**: Handle HTTP requests and responses
 4. **Consumers**: Handle WebSocket connections and events
-5. **Utilities**: Shared functionality across apps
+5. **Utilities**: Shared functionality across apps including encryption and email services
 
 The application uses Django REST Framework for the HTTP API and Django Channels for real-time WebSocket communication.
 
@@ -239,24 +249,68 @@ Encrypted user data backups:
 | `size` | PositiveIntegerField | Size in bytes |
 | `created_at` | DateTimeField | Creation timestamp |
 
+## 📧 Email Notification System
+
+FunLife Messenger includes a comprehensive email notification system to keep users informed about important account activities and security events.
+
+### Email Service (`utils.email_service.EmailService`)
+
+The EmailService class provides methods for sending various types of email notifications:
+
+| Method | Description |
+|--------|-------------|
+| `send_email` | Base method for sending emails with HTML templates |
+| `send_verification_email` | Send email verification link/code |
+| `send_verification_success_email` | Send confirmation after successful verification |
+| `send_password_reset_email` | Send password reset link/code |
+| `send_login_notification` | Notify about new device logins |
+| `send_security_alert` | Alert about security-related events |
+| `send_2fa_enabled_notification` | Notify when 2FA is enabled |
+
+### Email Templates
+
+All email templates are responsive HTML templates located in the `templates/emails/` directory:
+
+| Template | Purpose |
+|----------|---------|
+| `verification.html` | Email verification with OTP code |
+| `verification_success.html` | Successful email verification |
+| `password_reset.html` | Password reset with OTP code |
+| `login_notification.html` | New device/location login notification |
+| `security_alert.html` | Security alert for suspicious activities |
+| `2fa_enabled.html` | Two-factor authentication enabled notification |
+
+### Email Triggering Events
+
+| Event | Email Type | Triggered From |
+|-------|------------|----------------|
+| User Registration | Verification | RegisterView |
+| Login (Unverified User) | Verification | LoginSerializer |
+| Successful Verification | Verification Success | EmailVerificationView |
+| Password Reset Request | Password Reset | PasswordResetRequestView |
+| New Device Login | Login Notification | UserSession.store_device_info |
+| Failed Login Attempts | Security Alert | SecurityLogger.log_authentication |
+| Suspicious Activity | Security Alert | SecurityLogger.log_suspicious_activity |
+| 2FA Enabled | 2FA Notification | TwoFactorSetupView |
+
 ## 🔌 API Endpoints
 
 ### Authentication API (`/api/auth/`)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/register/` | POST | Register a new user |
-| `/login/` | POST | Authenticate user and get tokens |
-| `/logout/` | POST | Logout and invalidate session |
-| `/token/refresh/` | POST | Refresh JWT token |
-| `/verify-email/` | POST | Verify email with OTP |
-| `/password/reset-request/` | POST | Request password reset |
-| `/password/reset-confirm/` | POST | Confirm password reset with OTP |
-| `/password/change/` | POST | Change password |
-| `/2fa/setup/` | POST | Set up two-factor authentication |
-| `/2fa/verify/` | POST | Verify 2FA code |
-| `/otp/refresh/` | POST | Refresh OTP code |
-| `/profile/` | GET/PUT | Get or update user profile |
+| Endpoint | Method | Description | Email Sent |
+|----------|--------|-------------|------------|
+| `/register/` | POST | Register a new user | Verification |
+| `/login/` | POST | Authenticate user and get tokens | Login notification |
+| `/logout/` | POST | Logout and invalidate session | None |
+| `/token/refresh/` | POST | Refresh JWT token | None |
+| `/verify-email/` | POST | Verify email with OTP | Verification success |
+| `/password/reset-request/` | POST | Request password reset | Password reset |
+| `/password/reset-confirm/` | POST | Confirm password reset with OTP | None |
+| `/password/change/` | POST | Change password | None |
+| `/2fa/setup/` | POST | Set up two-factor authentication | 2FA enabled |
+| `/2fa/verify/` | POST | Verify 2FA code | None |
+| `/otp/refresh/` | POST | Refresh OTP code | None |
+| `/profile/` | GET/PUT | Get or update user profile | None |
 
 ### Profile API (`/api/profile/`)
 
@@ -393,6 +447,16 @@ The process:
 4. Recipient uses their private key to decrypt the session key
 5. Recipient uses the session key to decrypt the message
 
+### Email Security
+
+Email security measures:
+1. HTML templates use inline CSS for maximum compatibility
+2. Emails are sent over TLS/SSL when configured
+3. Sensitive information is not included in emails (only verification codes)
+4. All email sending operations are wrapped in try/except blocks to prevent failures affecting core functionality
+5. Rate limiting is applied to prevent email flooding
+6. Email content is sanitized to prevent injection attacks
+
 ### Two-Factor Authentication
 
 Implemented using TOTP (Time-based One-Time Password):
@@ -400,6 +464,7 @@ Implemented using TOTP (Time-based One-Time Password):
 2. Server generates a secret key
 3. User configures their authenticator app
 4. During login, user must provide code from authenticator
+5. Email notification is sent when 2FA is enabled/disabled
 
 ### Password Security
 
@@ -409,6 +474,7 @@ Enhanced password security:
 3. Check against Have I Been Pwned database
 4. Rate limiting for login attempts
 5. Account lockout after repeated failures
+6. Email notifications for password changes and resets
 
 ### Session Management
 
@@ -418,7 +484,8 @@ Secure session handling:
 3. IP address logging
 4. Activity timestamps
 5. Session expiration
-6. Ability to invalidate sessions remotely
+6. Email notifications for new sessions
+7. Ability to invalidate sessions remotely
 
 ## 🧪 Testing
 
@@ -428,6 +495,7 @@ The project includes comprehensive test suites for all major components:
 2. **API Tests**: Test HTTP endpoints
 3. **WebSocket Tests**: Test real-time communication
 4. **Integration Tests**: Test interactions between components
+5. **Email Tests**: Test email sending functionality
 
 Run tests with:
 
@@ -446,6 +514,7 @@ python manage.py test
 - **PyOTP**: OTP generation and verification
 - **python-decouple**: Environment variable management
 - **Daphne**: ASGI server
+- **Requests**: HTTP client for external API calls (HIBP check)
 
 ## 🛠️ Development Guidelines
 
@@ -454,6 +523,7 @@ python manage.py test
 3. **Testing**: Write tests for new features
 4. **Security**: Follow security best practices
 5. **Error Handling**: Implement proper error handling and logging
+6. **Email Templates**: Keep email templates responsive and compatible with major clients
 
 ## 📝 API Versioning
 
@@ -471,3 +541,46 @@ Log levels:
 - WARNING: Suspicious activity
 - ERROR: Security concerns
 - CRITICAL: Severe security issues
+
+## 📧 Email Configuration
+
+Email sending requires proper configuration in the .env file:
+
+```
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+EMAIL_HOST_USER=your-email@gmail.com
+EMAIL_HOST_PASSWORD=your-app-password
+DEFAULT_FROM_EMAIL=noreply@funlifemessenger.com
+```
+
+For development, you can use Django's console email backend:
+
+```
+EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+```
+
+## 🚀 Deployment Recommendations
+
+1. **Web Server**: Use Nginx as a reverse proxy
+2. **ASGI Server**: Daphne for handling WebSockets
+3. **Process Manager**: Supervisor or systemd
+4. **Database**: PostgreSQL in production
+5. **Caching**: Redis for cache and Channels
+6. **HTTPS**: Always use SSL/TLS in production
+7. **Monitoring**: Set up monitoring for logs and server metrics
+8. **Backup**: Regular database backups
+
+## 📖 Future Improvements
+
+1. **API Documentation**: Add OpenAPI/Swagger documentation
+2. **Performance Optimization**: Caching for frequently accessed data
+3. **Internationalization**: Support for multiple languages
+4. **Message Content Filtering**: Content moderation for messages
+5. **Advanced Search**: Full-text search for messages
+6. **Push Notifications**: Mobile push notification support
+7. **Voice/Video Calls**: Implement WebRTC for calls
+8. **Message Reactions**: Add support for emoji reactions to messages
