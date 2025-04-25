@@ -1,2 +1,3 @@
 from utils.password_validator import PasswordValidator
 from utils.encryption import E2EEncryption
+from utils.email_service import EmailService
