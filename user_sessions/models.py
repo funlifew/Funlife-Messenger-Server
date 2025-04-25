@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
+from utils.email_service import EmailService
 import uuid, json
 # Create your models here.
 
@@ -58,6 +59,42 @@ class UserSession(models.Model):
             return "Unknown Device"
     
     # Methods
+    
+    def send_login_notification(self):
+        """Send login notification email to the user"""
+        try:
+            EmailService.send_login_notification(self.user, self)
+        except Exception as e:
+            # Log error but continue
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to send login notification: {str(e)}")
+    
+    def store_device_info(self, user_agent=None, ip=None, **extra_data):
+        """Store structured device info as JSON"""
+        device_data = extra_data or {}
+        
+        if user_agent:
+            device_data.update({
+                'user_agent': str(user_agent),
+                'browser': self._parse_browser(user_agent),
+                'os': self._parse_os(user_agent)
+            })
+        
+        if ip:
+            self.ip_address = ip
+        
+        self.device_info = json.dumps(device_data)
+        self.save(update_fields=['device_info', 'ip_address'])
+        
+        # Send login notification
+        self.send_login_notification()
+    
+    def notify_session_created(self):
+        """Send notification email for new session creation"""
+        if self.user and self.user.email:
+            EmailService.send_login_notification(self.user, self)
+    
     def update_activity(self):
         """Update the last activity timestamp"""
         self.last_activity = timezone.now()
