@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Alert</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #e53935;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            border: 1px solid #ddd;
+            border-top: none;
+            padding: 20px;
+            border-radius: 0 0 5px 5px;
+        }
+        .details {
+            background-color: #f5f5f5;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+        .button {
+            display: inline-block;
+            background-color: #e53935;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Security Alert</h1>
+    </div>
+    <div class="content">
+        <h2>Security Alert: {{ event_type }}</h2>
+        <p>Hello {{ user.username }},</p>
+        <p>We detected a security-related event on your {{ app_name }} account that requires your attention.</p>
+        
+        <div class="details">
+            <p><strong>Event Type:</strong> {{ event_type }}</p>
+            {% if details %}
+                {% for key, value in details.items %}
+                    {% if key != 'timestamp' %}
+                        <p><strong>{{ key|title }}:</strong> {{ value }}</p>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+            {% if timestamp %}
+                <p><strong>Time:</strong> {{ timestamp }}</p>
+            {% endif %}
+        </div>
+        
+        <p>If you recognize this activity, you can ignore this alert.</p>
+        
+        <p>If you did not perform this action, your account may be at risk. Please take the following steps immediately:</p>
+        <ol>
+            <li>Change your password</li>
+            <li>Enable two-factor authentication if you haven't already</li>
+            <li>Review and terminate any suspicious sessions</li>
+            <li>Check for any unusual activity in your account</li>
+        </ol>
+        
+        <p style="text-align: center;">
+            <a href="#" class="button">Secure Your Account</a>
+        </p>
+        
+        <p>Best regards,<br>The {{ app_name }} Team</p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message, please do not reply to this email.</p>
+        <p>&copy; {{ current_year }} {{ app_name }}. All rights reserved.</p>
+    </div>
+</body>
+</html>
