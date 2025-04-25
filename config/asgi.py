@@ -13,15 +13,15 @@ django.setup()  # Configure Django settings
 # Now import the rest of your modules
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.security.websocket import AllowedHostsOriginValidator
-from messagings.middlewares import JWTAuthMiddleware
-import messagings.routing
+from realtime.middlewares import JWTAuthMiddleware
+import realtime.routing
 
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),
     "websocket": AllowedHostsOriginValidator(
         JWTAuthMiddleware(
             URLRouter(
-                messagings.routing.websocket_urlpatterns
+                realtime.routing.websocket_urlpatterns
             )
         )
     ),
