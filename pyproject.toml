@@ -18,6 +18,7 @@ cryptography = "^44.0.2"
 requests = "^2.32.3"
 pyotp = "^2.9.0"
 daphne = "^4.1.2"
+django-cors-headers = "^4.7.0"
 
 
 [build-system]
